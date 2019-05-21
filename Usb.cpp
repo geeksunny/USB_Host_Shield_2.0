@@ -499,6 +499,9 @@ void USB::Task(void) //USB state machine
                                 if(devConfig[i])
                                         rcode = devConfig[i]->Release();
 
+                        // If we're releasing all device configs, it should be safe to reset all device addresses... right??
+                        addrPool.InitAllAddresses();
+
                         usb_task_state = USB_DETACHED_SUBSTATE_WAIT_FOR_DEVICE;
                         break;
                 case USB_DETACHED_SUBSTATE_WAIT_FOR_DEVICE: //just sit here
@@ -599,22 +602,22 @@ uint8_t USB::DefaultAddressing(uint8_t parent, uint8_t port, bool lowspeed) {
 };
 
 void USB::ResetHubPort(uint8_t parent, uint8_t port) {
-	if (parent == 0) {
-		// Send a bus reset on the root interface.
-		regWr(rHCTL, bmBUSRST); //issue bus reset
-		delay(102); // delay 102ms, compensate for clock inaccuracy.
-	} else {
-		for (uint8_t i = 0; i < USB_NUMDEVICES; i++) {
-			if (devConfig[i]) {
-				UsbDeviceAddress addr;
-				addr.devAddress = devConfig[i]->GetAddress();
-				if (addr.bmHub && addr.bmAddress == parent) {
-					devConfig[i]->ResetHubPort(port);
-					break;
-				}
-			}
-		}
-	}
+    	if (parent == 0) {
+                // Send a bus reset on the root interface.
+                regWr(rHCTL, bmBUSRST); //issue bus reset
+                delay(102); // delay 102ms, compensate for clock inaccuracy.
+	    } else {
+		        for (uint8_t i = 0; i < USB_NUMDEVICES; i++) {
+			            if (devConfig[i]) {
+                                UsbDeviceAddress addr;
+                                addr.devAddress = devConfig[i]->GetAddress();
+                                if (addr.bmHub && addr.bmAddress == parent) {
+                                    devConfig[i]->ResetHubPort(port);
+                                    break;
+                                }
+			            }
+		        }
+	    }
 }
 
 uint8_t USB::AttemptConfig(uint8_t driver, uint8_t parent, uint8_t port, bool lowspeed) {
@@ -788,19 +791,17 @@ uint8_t USB::ReleaseDevice(uint8_t addr) {
         if(!addr)
                 return 0;
         a.devAddress = addr;
-        if(a.bmHub) {
-                for(uint8_t i = 0; i < USB_NUMDEVICES; i++) {
-                        if(!devConfig[i]) continue;
-                        if(devConfig[i]->GetAddress() == addr)
-                        return devConfig[i]->Release();
+        for (uint8_t i = 0; i < USB_NUMDEVICES; i++) {
+                if (!devConfig[i]) {
+                    continue;
                 }
-        } else {
-                for(uint8_t i = 0; i < USB_NUMDEVICES; i++) {
-                        if(!devConfig[i]) continue;
-                        if(devConfig[i]->GetPortAddress() == addr)
-                        return devConfig[i]->Release();
+                if((a.bmHub && devConfig[i]->GetAddress() == addr) || (!a.bmHub && devConfig[i]->GetPortAddress() == addr)) {
+                        uint8_t rcode = devConfig[i]->Release();
+                        addrPool.FreeAddress(addr); // HACKY FIX FOR UNCLAIMED ADDRESSES NOT BEING CLEARED OUT
+                        return rcode;
                 }
         }
+        addrPool.FreeAddress(addr); // HACKY FIX FOR UNCLAIMED ADDRESSES NOT BEING CLEARED OUT
         return 0;
 }
 

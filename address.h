@@ -159,13 +159,6 @@ class AddressPoolImpl : public AddressPool {
 
         // Initializes the whole address pool at once
 
-        void InitAllAddresses() {
-                for(uint8_t i = 1; i < MAX_DEVICES_ALLOWED; i++)
-                        InitEntry(i);
-
-                hubCounter = 0;
-        };
-
 public:
 
         AddressPoolImpl() : hubCounter(0) {
@@ -267,6 +260,14 @@ public:
                 }
                 uint8_t index = FindAddressIndex(addr);
                 FreeAddressByIndex(index);
+        };
+
+        // Moved to public as a cheap hack to clear addresses on all devices unplugged.
+        void InitAllAddresses() {
+                for(uint8_t i = 1; i < MAX_DEVICES_ALLOWED; i++)
+                        InitEntry(i);
+
+                hubCounter = 0;
         };
 
         // Returns number of hubs attached
